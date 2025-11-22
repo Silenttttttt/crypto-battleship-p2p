@@ -8,9 +8,15 @@ import time
 from typing import Dict, Any, Optional
 from dataclasses import asdict
 
-from crypto_battleship_clean import CryptoBattleshipGame, MerkleProof, MoveType, GameMove
-from battleship_p2p import BattleshipP2P, GamePhase, GameMessageType
-from transport_adapter import SocketTransportAdapter
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from game.core import CryptoBattleshipGame
+from crypto.merkle import MerkleProof
+from crypto.blockchain import MoveType, GameMove
+from network.p2p import BattleshipP2P, GamePhase, GameMessageType
+from network.transport import SocketTransportAdapter
 
 
 class CryptoBattleshipP2P(BattleshipP2P):

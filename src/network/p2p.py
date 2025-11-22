@@ -14,13 +14,17 @@ import uuid
 # Import ExProtocol components
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), 'ExProtocol'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'ExProtocol'))
 
 from protocol_wrapper import ProtocolWrapper
 from protocol import ExProtocol
 
 # Import transport abstraction
-from transport_adapter import TransportAdapter, TransportState
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
+from network.transport import TransportAdapter, TransportState
 
 
 class GameMessageType(Enum):

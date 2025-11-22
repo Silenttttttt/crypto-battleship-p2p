@@ -9,9 +9,13 @@ import time
 import sys
 import os
 
-from crypto_battleship_p2p import CryptoBattleshipP2P
-from transport_adapter import SocketTransportAdapter
-from battleship_p2p import GamePhase
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+
+from network.integration import CryptoBattleshipP2P
+from network.transport import SocketTransportAdapter
+from network.p2p import GamePhase
 
 
 class TestPlayer:
