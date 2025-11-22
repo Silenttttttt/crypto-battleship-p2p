@@ -112,9 +112,9 @@ class CryptoBattleshipCLI:
             else:
                 print("⏳ Waiting for opponent's move...")
     
-    def _on_message_received(self, message):
+    def _on_message_received(self, message_type, data):
         """Handle received messages"""
-        print(f"📨 Received: {message}")
+        print(f"📨 Received {message_type}: {data}")
     
     def _display_grids(self):
         """Display both grids side by side"""
