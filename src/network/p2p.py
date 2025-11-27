@@ -11,13 +11,9 @@ from enum import Enum
 from dataclasses import dataclass, asdict
 import uuid
 
-# Import ExProtocol components
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'ExProtocol'))
-
-from protocol_wrapper import ProtocolWrapper
-from protocol import ExProtocol
+# Import ExProtocol from published package
+from ExProtocol import ProtocolWrapper
+from ExProtocol import ExProtocol
 
 # Import transport abstraction
 import sys

@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from crypto.merkle import MerkleGridCommitment, MerkleProof
 from crypto.identity import CryptoIdentity
-from crypto.blockchain import BattleshipBlockchain, GameMove, MoveType
+from crypto.blockchain import Blockchain, Transaction, MoveType
 
 
 class CryptoBattleshipGame:
@@ -27,7 +27,7 @@ class CryptoBattleshipGame:
         # Cryptographic components
         self.identity = CryptoIdentity(self.seed, ship_positions)
         self.grid_commitment = MerkleGridCommitment(ship_positions, self.seed)
-        self.blockchain = BattleshipBlockchain()
+        self.blockchain = Blockchain()
         
         # Game state
         self.opponent_root: Optional[str] = None
@@ -62,14 +62,14 @@ class CryptoBattleshipGame:
         )
         
         # Add commitment to blockchain
-        move = GameMove(
-            move_type=MoveType.GRID_COMMITMENT,
-            player_id=self.opponent_player_id,
+        transaction = Transaction(
+            move_type=MoveType.COMMITMENT,
+            participant_id=self.opponent_player_id,
             data=opponent_data,
             timestamp=time.time(),
             signature=""  # Commitment doesn't need signature
         )
-        self.blockchain.add_move(move)
+        self.blockchain.add_transaction(transaction)
         
         print(f"🤝 Opponent commitment received!")
         print(f"   Opponent ID: {self.opponent_player_id}")

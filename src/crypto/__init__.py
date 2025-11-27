@@ -1,17 +1,34 @@
 """
-Cryptographic components for Crypto Battleship
+Cryptographic Framework for Commitments and Proofs
+
+This package provides cryptographic primitives for verifiable commitments:
+- Merkle tree commitments
+- Cryptographic identity and signatures  
+- Immutable blockchain for history
+- Proof generation and verification
+
+The framework is domain-agnostic and reusable.
 """
 
-from .merkle import MerkleProof, MerkleGridCommitment
+# Framework API (recommended way to use)
+from .framework import CryptoFramework, create_crypto_framework
+
+# Core components (for direct access if needed)
+from .merkle import MerkleProof, MerkleGridCommitment, SimpleMerkleTree
 from .identity import CryptoIdentity
-from .blockchain import BattleshipBlockchain, GameMove, MoveType, GameBlock
+from .blockchain import Blockchain, Transaction, MoveType, Block
 
 __all__ = [
+    # Framework API
+    'CryptoFramework',
+    'create_crypto_framework',
+    # Core components
     'MerkleProof',
-    'MerkleGridCommitment', 
+    'MerkleGridCommitment',
+    'SimpleMerkleTree',
     'CryptoIdentity',
-    'BattleshipBlockchain',
-    'GameMove',
+    'Blockchain',
+    'Transaction',
     'MoveType',
-    'GameBlock'
+    'Block'
 ]
