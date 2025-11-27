@@ -13,7 +13,6 @@ import uuid
 
 # Import ExProtocol from published package
 from ExProtocol import ProtocolWrapper
-from ExProtocol import ExProtocol
 
 # Import transport abstraction
 import sys
@@ -102,7 +101,10 @@ class BattleshipP2P:
         self.transport = transport
         
         # ExProtocol integration
+        # Create protocol wrapper and disable Hamming (can enable if binary is available)
         self.protocol_wrapper = ProtocolWrapper()
+        # Disable Hamming to avoid requiring binary (can enable if needed)
+        self.protocol_wrapper.protocol.use_hamming = False
         self.connection_established = False
         self.connection_role = None  # "listener" or "connector" - just for initial setup
         
