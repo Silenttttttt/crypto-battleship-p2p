@@ -149,3 +149,4 @@ Thumbs.db
 *.tmp
 game_saves/
 debug_output/
+game_state.json
