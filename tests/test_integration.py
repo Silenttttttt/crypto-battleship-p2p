@@ -81,8 +81,11 @@ def test_final_verification():
     alice = TestPlayer("Alice", alice_ships)
     bob = TestPlayer("Bob", bob_ships)
     
-    print(f"🎮 Alice: {alice.game.crypto_game.identity.player_id}")
-    print(f"🎮 Bob: {bob.game.crypto_game.identity.player_id}")
+    # Get player IDs - framework-based or legacy
+    alice_id = alice.game.crypto_game.protocol.my_participant_id if hasattr(alice.game.crypto_game, 'protocol') else alice.game.crypto_game.identity.player_id
+    bob_id = bob.game.crypto_game.protocol.my_participant_id if hasattr(bob.game.crypto_game, 'protocol') else bob.game.crypto_game.identity.player_id
+    print(f"🎮 Alice: {alice_id}")
+    print(f"🎮 Bob: {bob_id}")
     
     try:
         # Step 1: P2P Connection
@@ -135,10 +138,13 @@ def test_final_verification():
         
         # Step 4: Final Status
         print("\n📊 Step 4: Final Status...")
-        print(f"Alice blockchain blocks: {len(alice.game.crypto_game.blockchain.chain)}")
-        print(f"Bob blockchain blocks: {len(bob.game.crypto_game.blockchain.chain)}")
-        print(f"Alice blockchain valid: {alice.game.crypto_game.blockchain.verify_chain()}")
-        print(f"Bob blockchain valid: {bob.game.crypto_game.blockchain.verify_chain()}")
+        # Get blockchain - framework-based or legacy
+        alice_blockchain = alice.game.crypto_game.protocol.blockchain if hasattr(alice.game.crypto_game, 'protocol') else alice.game.crypto_game.blockchain
+        bob_blockchain = bob.game.crypto_game.protocol.blockchain if hasattr(bob.game.crypto_game, 'protocol') else bob.game.crypto_game.blockchain
+        print(f"Alice blockchain blocks: {len(alice_blockchain.chain)}")
+        print(f"Bob blockchain blocks: {len(bob_blockchain.chain)}")
+        print(f"Alice blockchain valid: {alice_blockchain.verify_chain()}")
+        print(f"Bob blockchain valid: {bob_blockchain.verify_chain()}")
         
         print("\n🎉 FINAL VERIFICATION PASSED!")
         print("✅ P2P connection working")

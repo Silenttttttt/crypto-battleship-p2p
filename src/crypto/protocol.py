@@ -16,6 +16,7 @@ This is domain-agnostic - can be used for games, voting, contracts, etc.
 
 import json
 import time
+import threading
 from typing import Any, Dict, List, Optional, Tuple, Callable
 from dataclasses import dataclass, asdict
 from ecdsa import VerifyingKey, SECP256k1
@@ -23,6 +24,10 @@ from ecdsa import VerifyingKey, SECP256k1
 from .merkle import MerkleGridCommitment, MerkleProof, SimpleMerkleTree
 from .identity import CryptoIdentity
 from .blockchain import Blockchain, Transaction, MoveType
+from .timeout import ActionTimeout, TimeoutConfig, TimeoutReason, ProtocolMonitor
+from .cheating import CheatType, CheatEvidence, CheatDetector, CheatInvalidator
+from .state_manager import StateManager
+from .reconnection import ReconnectionHandler
 
 
 @dataclass
@@ -31,6 +36,96 @@ class VerificationResult:
     valid: bool
     reason: str = ""
     details: Dict[str, Any] = None
+
+
+class ProtocolEnforcement:
+    """
+    Enforcement manager for protocol rules.
+    Handles timeout enforcement, turn order, and violation detection.
+    """
+    
+    def __init__(self, protocol, timeout_config: TimeoutConfig = None):
+        self.protocol = protocol
+        self.timeout_manager = ActionTimeout(timeout_config or TimeoutConfig())
+        self.current_turn: Optional[str] = None
+        self.turn_sequence: List[str] = []  # History of whose turn it was
+        self.action_timeouts: Dict[str, float] = {}  # action_id -> custom timeout
+    
+    def start_action_with_timeout(self, action_id: str, timeout: float = 30.0) -> None:
+        """Start tracking an action with custom timeout"""
+        # Store custom timeout for this action
+        self.action_timeouts[action_id] = timeout
+        self.timeout_manager.start_action(action_id)
+    
+    def enforce_turn_order(self, participant_id: str) -> bool:
+        """
+        Enforce turn order. Returns True if it's their turn, False otherwise.
+        """
+        # If no turn is set, allow first action
+        if self.current_turn is None:
+            self.current_turn = participant_id
+            self.turn_sequence.append(participant_id)
+            return True
+        
+        # Check if it's their turn
+        if self.current_turn == participant_id:
+            return True
+        
+        # Not their turn - violation
+        return False
+    
+    def switch_turn(self) -> None:
+        """Switch turn to the other participant"""
+        if self.current_turn and self.protocol.opponent_participant_id:
+            if self.current_turn == self.protocol.my_participant_id:
+                self.current_turn = self.protocol.opponent_participant_id
+            else:
+                self.current_turn = self.protocol.my_participant_id
+            self.turn_sequence.append(self.current_turn)
+    
+    def handle_timeout(self, action_id: str) -> Optional[CheatEvidence]:
+        """Handle a timeout and create cheat evidence"""
+        if not self.protocol.opponent_participant_id:
+            return None
+        
+        # Check if we have cheat detector
+        if not hasattr(self.protocol, 'cheat_detector'):
+            return None
+        
+        cheat = self.protocol.cheat_detector.record_cheat(
+            CheatType.TIMEOUT_STALL,
+            self.protocol.opponent_participant_id,
+            f"Timeout on action {action_id}",
+            {'action_id': action_id, 'timeout': self.timeout_manager.config.action_timeout}
+        )
+        return cheat
+    
+    def check_and_enforce(self) -> List[CheatEvidence]:
+        """Check for violations and return list of cheat evidence"""
+        violations = []
+        
+        # Check timeouts with custom timeout values
+        now = time.time()
+        timed_out = {}
+        
+        for action_id, start_time in list(self.timeout_manager.pending_actions.items()):
+            elapsed = now - start_time
+            
+            # Use custom timeout if set, otherwise use default
+            custom_timeout = self.action_timeouts.get(action_id, self.timeout_manager.config.action_timeout)
+            
+            if elapsed > custom_timeout:
+                timed_out[action_id] = TimeoutReason.NO_RESPONSE
+                del self.timeout_manager.pending_actions[action_id]
+                if action_id in self.action_timeouts:
+                    del self.action_timeouts[action_id]
+        
+        for action_id, reason in timed_out.items():
+            cheat = self.handle_timeout(action_id)
+            if cheat:
+                violations.append(cheat)
+        
+        return violations
 
 
 class ZeroTrustProtocol:
@@ -49,13 +144,21 @@ class ZeroTrustProtocol:
     
     def __init__(self, 
                  my_commitment_data: Any,
-                 seed: bytes = None):
+                 seed: bytes = None,
+                 enable_enforcement: bool = True,
+                 enable_persistence: bool = True,
+                 timeout_config: TimeoutConfig = None,
+                 save_path: Optional[str] = None):
         """
         Initialize protocol with commitment to initial state.
         
         Args:
             my_commitment_data: Data to commit to (e.g., grid state)
             seed: Optional seed for deterministic key generation
+            enable_enforcement: Enable protocol enforcement (timeouts, turn order)
+            enable_persistence: Enable state persistence (save/load)
+            timeout_config: Custom timeout configuration
+            save_path: Path for state persistence file
         """
         self.seed = seed
         
@@ -74,9 +177,48 @@ class ZeroTrustProtocol:
         self.my_actions_count = 0
         self.opponent_actions_count = 0
         
-        # Verification callbacks (application-specific)
+        # Enforcement and cheat detection
+        self.enable_enforcement = enable_enforcement
+        if enable_enforcement:
+            self.enforcement = ProtocolEnforcement(self, timeout_config)
+            self.cheat_detector = CheatDetector(self.my_participant_id)
+            self.cheat_invalidator = CheatInvalidator()
+        else:
+            self.enforcement = None
+            self.cheat_detector = None
+            self.cheat_invalidator = None
+        
+        # State persistence
+        self.enable_persistence = enable_persistence
+        if enable_persistence:
+            self.state_manager = StateManager(self, save_path or "game_state.json")
+            # Try to load existing state
+            self.state_manager.load_state()
+            # Start auto-save
+            self.state_manager.start_auto_save()
+            # Initialize reconnection handler
+            self.reconnection_handler = ReconnectionHandler(self, self.state_manager)
+        else:
+            self.state_manager = None
+            self.reconnection_handler = None
+        
+        # Monitoring state
+        self._monitoring = False
+        self._monitor_thread = None
+        self.opponent_revealed = False
+        self._monitor_interval = 1.0
+        
+        # Protocol health monitoring
+        if enable_enforcement:
+            self.health_monitor = ProtocolMonitor()
+        else:
+            self.health_monitor = None
+        
+        # Callbacks
         self.verify_commitment_callback: Optional[Callable] = None
         self.verify_action_callback: Optional[Callable] = None
+        self.on_violation: Optional[Callable[[CheatEvidence], None]] = None
+        self.on_disconnect: Optional[Callable[[], None]] = None
         
     def get_my_commitment(self) -> Dict[str, str]:
         """
@@ -167,6 +309,32 @@ class ZeroTrustProtocol:
                 reason="Opponent commitment not set"
             )
         
+        # Enforce turn order if enforcement is enabled
+        if self.enable_enforcement and self.enforcement:
+            if not self.enforcement.enforce_turn_order(self.opponent_participant_id):
+                # Turn violation - record cheating
+                if self.cheat_detector:
+                    cheat = self.cheat_detector.record_cheat(
+                        CheatType.DOUBLE_MOVE,
+                        self.opponent_participant_id,
+                        "Move attempted out of turn",
+                        {
+                            'action_data': action_data,
+                            'current_turn': self.enforcement.current_turn,
+                            'attempted_by': self.opponent_participant_id
+                        }
+                    )
+                    if self.cheat_invalidator:
+                        self.cheat_invalidator.invalidate_participant(
+                            self.opponent_participant_id,
+                            cheat
+                        )
+                
+                return VerificationResult(
+                    valid=False,
+                    reason="Turn violation - opponent attempted move out of turn"
+                )
+        
         # Verify signature
         message = json.dumps(action_data, sort_keys=True)
         signature_valid = self.identity.verify_signature(
@@ -193,6 +361,10 @@ class ZeroTrustProtocol:
         self.blockchain.add_transaction(transaction)
         self.blockchain.mine_block()
         self.opponent_actions_count += 1
+        
+        # Switch turn after valid action
+        if self.enable_enforcement and self.enforcement:
+            self.enforcement.switch_turn()
         
         return VerificationResult(
             valid=True,
@@ -462,6 +634,278 @@ class ZeroTrustProtocol:
         
         return result
     
+    def handle_disconnect(self) -> None:
+        """Handle disconnection"""
+        if self.reconnection_handler:
+            self.reconnection_handler.handle_disconnect()
+        
+        if self.on_disconnect:
+            self.on_disconnect()
+    
+    def attempt_reconnect(self, connect_fn: Callable[[], bool]) -> bool:
+        """Attempt reconnection"""
+        if self.reconnection_handler:
+            return self.reconnection_handler.attempt_reconnection(connect_fn)
+        return False
+    
+    def verify_state_after_reconnect(self) -> bool:
+        """Verify blockchain consistency after reconnection"""
+        if self.reconnection_handler:
+            return self.reconnection_handler.verify_state_after_reconnect()
+        return True
+    
+    def sync_blockchain(self) -> None:
+        """Sync blockchain with opponent (placeholder - should be called by network layer)"""
+        # This is a placeholder - actual sync happens via network layer
+        # But we can verify our blockchain is valid
+        if not self.blockchain.verify_chain():
+            print("⚠️  Blockchain invalid after sync attempt")
+    
+    def start_monitoring(self, interval: float = 1.0) -> None:
+        """
+        Start continuous monitoring thread.
+        
+        Args:
+            interval: Seconds between monitoring checks
+        """
+        if self._monitoring:
+            return
+        
+        if not self.enable_enforcement:
+            print("⚠️  Monitoring requires enforcement to be enabled")
+            return
+        
+        self._monitoring = True
+        self._monitor_interval = interval
+        
+        self._monitor_thread = threading.Thread(
+            target=self._monitor_loop,
+            args=(interval,),
+            daemon=True
+        )
+        self._monitor_thread.start()
+        print("✅ Monitoring started")
+    
+    def stop_monitoring(self) -> None:
+        """Stop monitoring"""
+        if not self._monitoring:
+            return
+        
+        self._monitoring = False
+        if self._monitor_thread:
+            self._monitor_thread.join(timeout=2.0)
+            self._monitor_thread = None
+        print("⏹️  Monitoring stopped")
+    
+    def _monitor_loop(self, interval: float) -> None:
+        """Continuous monitoring loop"""
+        last_save_time = time.time()
+        save_interval = 30.0  # Auto-save every 30 seconds
+        
+        while self._monitoring:
+            try:
+                # Check enforcement
+                violations = self.check_enforcement()
+                if violations:
+                    self._handle_violations(violations)
+                
+                # Check health
+                if self.health_monitor:
+                    health = self.health_monitor.get_health_status()
+                    if health.get('is_stalled', False):
+                        self._handle_stall()
+                    # Record activity
+                    self.health_monitor.record_activity()
+                
+                # Periodic auto-save
+                if self.state_manager and time.time() - last_save_time >= save_interval:
+                    self.state_manager.save_state()
+                    last_save_time = time.time()
+                
+                time.sleep(interval)
+                
+            except Exception as e:
+                print(f"⚠️  Monitoring error: {e}")
+                time.sleep(interval)
+    
+    def _handle_violations(self, violations: List[CheatEvidence]) -> None:
+        """Handle detected violations"""
+        for violation in violations:
+            # Log violation
+            print(f"🚫 VIOLATION DETECTED: {violation.cheat_type.value}")
+            print(f"   Cheater: {violation.cheater_id}")
+            print(f"   Reason: {violation.description}")
+            
+            # Invalidate cheater
+            if self.cheat_invalidator:
+                self.cheat_invalidator.invalidate_participant(
+                    violation.cheater_id,
+                    violation
+                )
+            
+            # Trigger forfeit callback
+            if self.on_violation:
+                try:
+                    self.on_violation(violation)
+                except Exception as e:
+                    print(f"⚠️  Error in violation callback: {e}")
+    
+    def _handle_stall(self) -> None:
+        """Handle protocol stall detection"""
+        if self.health_monitor:
+            health = self.health_monitor.get_health_status()
+            if health.get('is_stalled', False):
+                print("⚠️  Protocol appears stalled - checking for timeout violations...")
+                # Check enforcement will handle timeouts
+                violations = self.check_enforcement()
+                if violations:
+                    self._handle_violations(violations)
+    
+    def get_protocol_health(self) -> Dict[str, Any]:
+        """
+        Get protocol health status.
+        
+        Returns:
+            Dict with health metrics
+        """
+        health = {
+            'protocol_active': self.protocol_active,
+            'blockchain_valid': self.blockchain.verify_chain(),
+            'monitoring_active': self._monitoring,
+            'enforcement_enabled': self.enable_enforcement,
+            'persistence_enabled': self.enable_persistence
+        }
+        
+        if self.health_monitor:
+            monitor_health = self.health_monitor.get_health_status()
+            health.update(monitor_health)
+        
+        if self.enforcement:
+            health['pending_actions'] = len(self.enforcement.timeout_manager.pending_actions)
+            health['current_turn'] = self.enforcement.current_turn
+        
+        if self.cheat_detector:
+            health['cheats_detected'] = len(self.cheat_detector.detected_cheats)
+            health['opponent_is_cheater'] = self.cheat_detector.opponent_is_cheater
+        
+        return health
+    
+    def check_enforcement(self) -> List[CheatEvidence]:
+        """
+        Check all enforcement rules and auto-forfeit if needed.
+        Returns list of detected violations.
+        """
+        if not self.enable_enforcement or not self.enforcement:
+            return []
+        
+        violations = []
+        
+        # Use enforcement's check_and_enforce which handles custom timeouts
+        violations = self.enforcement.check_and_enforce()
+        
+        # Invalidate cheaters for all violations
+        for cheat in violations:
+            if self.cheat_invalidator:
+                self.cheat_invalidator.invalidate_participant(
+                    self.opponent_participant_id,
+                    cheat
+                )
+        
+        return violations
+    
+    def enforce_post_game_revelation(self, timeout: float = 60.0) -> bool:
+        """
+        Enforce post-game commitment revelation with timeout.
+        Opponent must reveal their commitment within timeout or be invalidated.
+        
+        Args:
+            timeout: Seconds to wait for revelation
+        
+        Returns:
+            True if opponent revealed, False if timeout/invalidated
+        """
+        if not self.enable_enforcement or not self.enforcement:
+            print("⚠️  Post-game enforcement requires enforcement to be enabled")
+            return False
+        
+        if not self.opponent_participant_id:
+            print("⚠️  No opponent to enforce revelation against")
+            return False
+        
+        # Start timeout for revelation
+        action_id = "post_game_reveal"
+        self.enforcement.timeout_manager.start_action(action_id)
+        original_timeout = self.enforcement.timeout_manager.config.action_timeout
+        self.enforcement.timeout_manager.config.action_timeout = timeout
+        
+        print(f"⏳ Waiting for opponent to reveal commitment (timeout: {timeout}s)...")
+        
+        # Wait for revelation or timeout
+        start = time.time()
+        while time.time() - start < timeout:
+            if self.opponent_revealed:
+                # Opponent revealed - complete timeout
+                self.enforcement.timeout_manager.complete_action(action_id)
+                self.enforcement.timeout_manager.config.action_timeout = original_timeout
+                print("✅ Opponent revealed commitment")
+                return True
+            
+            # Check if timeout occurred
+            timeouts = self.enforcement.timeout_manager.check_timeouts()
+            if action_id in timeouts:
+                # Timeout - opponent refused to reveal
+                self.enforcement.timeout_manager.config.action_timeout = original_timeout
+                
+                if self.cheat_detector:
+                    cheat = self.cheat_detector.record_cheat(
+                        CheatType.COMMITMENT_MISMATCH,
+                        self.opponent_participant_id,
+                        f"Refused to reveal commitment after game (timeout: {timeout}s)",
+                        {
+                            'timeout': timeout,
+                            'action_id': action_id,
+                            'elapsed': time.time() - start
+                        }
+                    )
+                    
+                    if self.cheat_invalidator:
+                        self.cheat_invalidator.invalidate_participant(
+                            self.opponent_participant_id,
+                            cheat
+                        )
+                
+                print(f"🚫 Opponent failed to reveal commitment within {timeout}s - INVALIDATED")
+                return False
+            
+            time.sleep(0.5)
+        
+        # Final check
+        if not self.opponent_revealed:
+            self.enforcement.timeout_manager.config.action_timeout = original_timeout
+            
+            if self.cheat_detector:
+                cheat = self.cheat_detector.record_cheat(
+                    CheatType.COMMITMENT_MISMATCH,
+                    self.opponent_participant_id,
+                    f"Refused to reveal commitment after game (timeout: {timeout}s)",
+                    {
+                        'timeout': timeout,
+                        'action_id': action_id,
+                        'elapsed': time.time() - start
+                    }
+                )
+                
+                if self.cheat_invalidator:
+                    self.cheat_invalidator.invalidate_participant(
+                        self.opponent_participant_id,
+                        cheat
+                    )
+            
+            print(f"🚫 Opponent failed to reveal commitment within {timeout}s - INVALIDATED")
+            return False
+        
+        return True
+    
     def verify_opponent_revelation(self, 
                                    revelation: Dict[str, Any],
                                    original_commitment_root: str) -> VerificationResult:
@@ -500,6 +944,9 @@ class ZeroTrustProtocol:
                 reason="Invalid signature on revelation"
             )
         
+        # Mark opponent as revealed
+        self.opponent_revealed = True
+        
         # Signature valid - application layer should verify actual commitment
         return VerificationResult(
             valid=True,
@@ -510,6 +957,7 @@ class ZeroTrustProtocol:
 
 __all__ = [
     'ZeroTrustProtocol',
-    'VerificationResult'
+    'VerificationResult',
+    'ProtocolEnforcement'
 ]
 

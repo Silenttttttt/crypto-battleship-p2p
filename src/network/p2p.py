@@ -459,12 +459,17 @@ class BattleshipP2P:
     
     def _trigger_blockchain_sync(self):
         """Trigger blockchain synchronization after game actions"""
-        # Get the actual blockchain - might be nested in crypto_game
+        # Get the actual blockchain - might be nested in crypto_game or protocol
         blockchain = None
         
         # Check for crypto_game first (integration layer)
-        if hasattr(self, 'crypto_game') and hasattr(self.crypto_game, 'blockchain'):
-            blockchain = self.crypto_game.blockchain
+        if hasattr(self, 'crypto_game'):
+            # Framework-based: blockchain is in protocol
+            if hasattr(self.crypto_game, 'protocol') and hasattr(self.crypto_game.protocol, 'blockchain'):
+                blockchain = self.crypto_game.protocol.blockchain
+            # Legacy: blockchain is direct attribute
+            elif hasattr(self.crypto_game, 'blockchain'):
+                blockchain = self.crypto_game.blockchain
         # Then check for game (base layer)
         elif hasattr(self, 'game') and self.game:
             if hasattr(self.game, 'blockchain'):
@@ -497,12 +502,17 @@ class BattleshipP2P:
         """Handle blockchain sync request from opponent"""
         print(f"📡 Received blockchain sync request")
         
-        # Get the actual blockchain - might be nested in crypto_game
+        # Get the actual blockchain - might be nested in crypto_game or protocol
         blockchain = None
         
         # Check for crypto_game first (integration layer)
-        if hasattr(self, 'crypto_game') and hasattr(self.crypto_game, 'blockchain'):
-            blockchain = self.crypto_game.blockchain
+        if hasattr(self, 'crypto_game'):
+            # Framework-based: blockchain is in protocol
+            if hasattr(self.crypto_game, 'protocol') and hasattr(self.crypto_game.protocol, 'blockchain'):
+                blockchain = self.crypto_game.protocol.blockchain
+            # Legacy: blockchain is direct attribute
+            elif hasattr(self.crypto_game, 'blockchain'):
+                blockchain = self.crypto_game.blockchain
         # Then check for game (base layer)
         elif hasattr(self, 'game') and self.game:
             if hasattr(self.game, 'blockchain'):
@@ -539,12 +549,17 @@ class BattleshipP2P:
         """Handle blockchain sync response from opponent"""
         print(f"📡 Received blockchain sync response")
         
-        # Get the actual blockchain - might be nested in crypto_game
+        # Get the actual blockchain - might be nested in crypto_game or protocol
         blockchain = None
         
         # Check for crypto_game first (integration layer)
-        if hasattr(self, 'crypto_game') and hasattr(self.crypto_game, 'blockchain'):
-            blockchain = self.crypto_game.blockchain
+        if hasattr(self, 'crypto_game'):
+            # Framework-based: blockchain is in protocol
+            if hasattr(self.crypto_game, 'protocol') and hasattr(self.crypto_game.protocol, 'blockchain'):
+                blockchain = self.crypto_game.protocol.blockchain
+            # Legacy: blockchain is direct attribute
+            elif hasattr(self.crypto_game, 'blockchain'):
+                blockchain = self.crypto_game.blockchain
         # Then check for game (base layer)
         elif hasattr(self, 'game') and self.game:
             if hasattr(self.game, 'blockchain'):

@@ -13,7 +13,7 @@ needing cryptographic guarantees without trust.
 """
 
 # Main Framework API (recommended)
-from .protocol import ZeroTrustProtocol, VerificationResult
+from .protocol import ZeroTrustProtocol, VerificationResult, ProtocolEnforcement
 from .commitment import CommitmentScheme, GridCommitment
 from .framework import CryptoFramework, create_crypto_framework
 from .sync import BlockchainSync, SyncState, create_sync_message, handle_sync_message
@@ -22,6 +22,8 @@ from .timeout import (
     DisputeResolution, ProtocolMonitor
 )
 from .cheating import CheatType, CheatEvidence, CheatDetector, CheatInvalidator
+from .state_manager import StateManager
+from .reconnection import ReconnectionHandler
 
 # Core components (for advanced usage)
 from .merkle import MerkleProof, MerkleGridCommitment, SimpleMerkleTree
@@ -32,6 +34,7 @@ __all__ = [
     # Main Framework API
     'ZeroTrustProtocol',
     'VerificationResult',
+    'ProtocolEnforcement',
     'CommitmentScheme',
     'GridCommitment',
     'CryptoFramework',
@@ -50,6 +53,8 @@ __all__ = [
     'CheatEvidence',
     'CheatDetector',
     'CheatInvalidator',
+    'StateManager',
+    'ReconnectionHandler',
     # Core components
     'MerkleProof',
     'MerkleGridCommitment',

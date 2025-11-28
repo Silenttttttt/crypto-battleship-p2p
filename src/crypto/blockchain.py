@@ -118,6 +118,91 @@ class Blockchain:
         
         return True
     
+    def serialize(self) -> Dict[str, Any]:
+        """Serialize blockchain to dict for persistence"""
+        return {
+            'chain': [
+                {
+                    'prev_hash': block.prev_hash,
+                    'transactions': [
+                        {
+                            'move_type': tx.move_type.value,
+                            'participant_id': tx.participant_id,
+                            'data': tx.data,
+                            'timestamp': tx.timestamp,
+                            'signature': tx.signature,
+                            'sequence_number': tx.sequence_number
+                        }
+                        for tx in block.transactions
+                    ],
+                    'block_number': block.block_number,
+                    'timestamp': block.timestamp,
+                    'hash': block.hash
+                }
+                for block in self.chain
+            ],
+            'pending_transactions': [
+                {
+                    'move_type': tx.move_type.value,
+                    'participant_id': tx.participant_id,
+                    'data': tx.data,
+                    'timestamp': tx.timestamp,
+                    'signature': tx.signature,
+                    'sequence_number': tx.sequence_number
+                }
+                for tx in self.pending_transactions
+            ],
+            'transaction_sequence': self.transaction_sequence,
+            'participant_sequences': self.participant_sequences
+        }
+    
+    @classmethod
+    def deserialize(cls, data: Dict[str, Any]) -> 'Blockchain':
+        """Load blockchain from serialized dict"""
+        blockchain = cls.__new__(cls)  # Create without calling __init__
+        
+        # Restore chain
+        blockchain.chain = []
+        for block_data in data['chain']:
+            transactions = [
+                Transaction(
+                    move_type=MoveType(block_tx['move_type']),
+                    participant_id=block_tx['participant_id'],
+                    data=block_tx['data'],
+                    timestamp=block_tx['timestamp'],
+                    signature=block_tx['signature'],
+                    sequence_number=block_tx.get('sequence_number', 0)
+                )
+                for block_tx in block_data['transactions']
+            ]
+            block = Block(
+                prev_hash=block_data['prev_hash'],
+                transactions=transactions,
+                block_number=block_data['block_number']
+            )
+            block.timestamp = block_data['timestamp']
+            block.hash = block_data['hash']
+            blockchain.chain.append(block)
+        
+        # Restore pending transactions
+        blockchain.pending_transactions = [
+            Transaction(
+                move_type=MoveType(tx_data['move_type']),
+                participant_id=tx_data['participant_id'],
+                data=tx_data['data'],
+                timestamp=tx_data['timestamp'],
+                signature=tx_data['signature'],
+                sequence_number=tx_data.get('sequence_number', 0)
+            )
+            for tx_data in data.get('pending_transactions', [])
+        ]
+        
+        # Restore sequence numbers
+        blockchain.transaction_sequence = data.get('transaction_sequence', 0)
+        blockchain.participant_sequences = data.get('participant_sequences', {})
+        
+        return blockchain
+    
     def get_transactions_by_participant(self, participant_id: str) -> List[Transaction]:
         """Get all transactions by a specific participant"""
         transactions = []

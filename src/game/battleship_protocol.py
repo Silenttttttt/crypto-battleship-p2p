@@ -47,7 +47,9 @@ class BattleshipZeroTrust:
     All cryptographic operations are delegated to ZeroTrustProtocol.
     """
     
-    def __init__(self, ship_positions: List[Tuple[int, int]], seed: bytes = None):
+    def __init__(self, ship_positions: List[Tuple[int, int]], seed: bytes = None,
+                 enable_enforcement: bool = True, enable_persistence: bool = True,
+                 enable_monitoring: bool = True, save_path: str = None):
         self.seed = seed or os.urandom(32)
         self.ship_positions = ship_positions
         
@@ -57,8 +59,15 @@ class BattleshipZeroTrust:
         # Initialize Zero-Trust Protocol (framework does the crypto)
         self.protocol = ZeroTrustProtocol(
             my_commitment_data=ship_positions,
-            seed=self.seed
+            seed=self.seed,
+            enable_enforcement=enable_enforcement,
+            enable_persistence=enable_persistence,
+            save_path=save_path
         )
+        
+        # Start monitoring if enabled
+        if enable_monitoring and enable_enforcement:
+            self.protocol.start_monitoring()
         
         # Cheat detection
         self.cheat_detector = CheatDetector(self.protocol.my_participant_id)
