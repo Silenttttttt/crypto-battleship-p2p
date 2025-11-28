@@ -1,25 +1,33 @@
 """
-Cryptographic Framework for Commitments and Proofs
+Zero-Trust Cryptographic Framework
 
-This package provides cryptographic primitives for verifiable commitments:
-- Merkle tree commitments
-- Cryptographic identity and signatures  
-- Immutable blockchain for history
-- Proof generation and verification
+This package provides a complete zero-trust protocol framework:
+- Zero-Trust Protocol (main framework class)
+- Merkle tree commitments (zero-knowledge)
+- Cryptographic identity and signatures (authentication)
+- Synchronized blockchain (immutable shared history)
+- Independent verification (anyone can verify)
 
-The framework is domain-agnostic and reusable.
+The framework is domain-agnostic and reusable for any application
+needing cryptographic guarantees without trust.
 """
 
-# Framework API (recommended way to use)
+# Main Framework API (recommended)
+from .protocol import ZeroTrustProtocol, VerificationResult
+from .commitment import CommitmentScheme, GridCommitment
 from .framework import CryptoFramework, create_crypto_framework
 
-# Core components (for direct access if needed)
+# Core components (for advanced usage)
 from .merkle import MerkleProof, MerkleGridCommitment, SimpleMerkleTree
 from .identity import CryptoIdentity
 from .blockchain import Blockchain, Transaction, MoveType, Block
 
 __all__ = [
-    # Framework API
+    # Main Framework API
+    'ZeroTrustProtocol',
+    'VerificationResult',
+    'CommitmentScheme',
+    'GridCommitment',
     'CryptoFramework',
     'create_crypto_framework',
     # Core components
