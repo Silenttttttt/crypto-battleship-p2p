@@ -15,7 +15,8 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from crypto import ZeroTrustProtocol, VerificationResult, GridCommitment
+from crypto import (ZeroTrustProtocol, VerificationResult, GridCommitment,
+                    CheatDetector, CheatType, CheatInvalidator)
 from crypto.merkle import MerkleProof
 
 
@@ -58,6 +59,10 @@ class BattleshipZeroTrust:
             my_commitment_data=ship_positions,
             seed=self.seed
         )
+        
+        # Cheat detection
+        self.cheat_detector = CheatDetector(self.protocol.my_participant_id)
+        self.cheat_invalidator = CheatInvalidator()
         
         # Game-specific state (not crypto)
         self.ships: List[Ship] = []
@@ -213,6 +218,7 @@ class BattleshipZeroTrust:
                              proof_signature: str) -> bool:
         """
         Verify opponent's proof - Framework handles verification.
+        DETECTS AND RECORDS CHEATING if proof is invalid.
         """
         if not hasattr(self, 'opponent_commitment_root'):
             print("❌ Opponent commitment not set!")
@@ -227,6 +233,32 @@ class BattleshipZeroTrust:
         
         if not verification.valid:
             print(f"❌ {verification.reason}")
+            
+            # RECORD CHEATING WITH EVIDENCE
+            self.cheat_detector.record_cheat(
+                cheat_type=CheatType.INVALID_PROOF,
+                cheater_id=self.protocol.opponent_participant_id,
+                description=f"Invalid proof for position {proof.position}: {verification.reason}",
+                evidence={
+                    'proof': {
+                        'position': proof.position,
+                        'has_ship': proof.has_ship,
+                        'result': proof.result,
+                        'leaf_data': proof.leaf_data,
+                        'merkle_path': proof.merkle_path
+                    },
+                    'commitment_root': self.opponent_commitment_root,
+                    'proof_signature': proof_signature
+                }
+            )
+            
+            # INVALIDATE OPPONENT
+            self.cheat_invalidator.invalidate_participant(
+                self.protocol.opponent_participant_id,
+                self.cheat_detector.cheating_proof
+            )
+            
+            print(f"🚫 OPPONENT INVALIDATED - CHEATING DETECTED AND PROVEN")
             return False
         
         # Track result
@@ -320,6 +352,7 @@ class BattleshipZeroTrust:
         """
         Verify opponent's revealed grid.
         Checks that their commitment matches their actual ship positions.
+        DETECTS POST-GAME CHEATING.
         """
         # First verify the revelation signature
         result = self.protocol.verify_opponent_revelation(
@@ -328,6 +361,17 @@ class BattleshipZeroTrust:
         )
         
         if not result.valid:
+            # Record signature forgery
+            self.cheat_detector.record_cheat(
+                cheat_type=CheatType.FORGED_SIGNATURE,
+                cheater_id=self.protocol.opponent_participant_id,
+                description="Invalid signature on grid revelation",
+                evidence={'revelation': revelation}
+            )
+            self.cheat_invalidator.invalidate_participant(
+                self.protocol.opponent_participant_id,
+                self.cheat_detector.cheating_proof
+            )
             return result
         
         # Reconstruct opponent's commitment from revealed data
@@ -345,9 +389,27 @@ class BattleshipZeroTrust:
             
             # Check if commitment root matches
             if reconstructed_commitment.get_commitment_root() != self.opponent_commitment_root:
+                # RECORD COMMITMENT MISMATCH - PROOF OF CHEATING
+                self.cheat_detector.record_cheat(
+                    cheat_type=CheatType.COMMITMENT_MISMATCH,
+                    cheater_id=self.protocol.opponent_participant_id,
+                    description=f"Revealed grid doesn't match commitment! Expected {self.opponent_commitment_root[:16]}..., got {reconstructed_commitment.get_commitment_root()[:16]}...",
+                    evidence={
+                        'revealed_positions': revealed_positions,
+                        'revealed_seed': revealed_seed_hex,
+                        'claimed_commitment': self.opponent_commitment_root,
+                        'actual_commitment': reconstructed_commitment.get_commitment_root()
+                    }
+                )
+                
+                self.cheat_invalidator.invalidate_participant(
+                    self.protocol.opponent_participant_id,
+                    self.cheat_detector.cheating_proof
+                )
+                
                 return VerificationResult(
                     valid=False,
-                    reason="Opponent cheated! Revealed grid doesn't match commitment"
+                    reason="🚫 OPPONENT CHEATED! Revealed grid doesn't match commitment - INVALIDATED"
                 )
             
             # Verify all our shots against revealed grid
@@ -356,9 +418,27 @@ class BattleshipZeroTrust:
                 claimed_hit = (result_str == 'hit')
                 
                 if actual_hit != claimed_hit:
+                    # RECORD LYING ABOUT SHOT RESULTS
+                    self.cheat_detector.record_cheat(
+                        cheat_type=CheatType.INVALID_PROOF,
+                        cheater_id=self.protocol.opponent_participant_id,
+                        description=f"Lied about shot at {shot_pos}! Claimed {result_str}, actually {'hit' if actual_hit else 'miss'}",
+                        evidence={
+                            'shot_position': shot_pos,
+                            'claimed_result': result_str,
+                            'actual_result': 'hit' if actual_hit else 'miss',
+                            'revealed_grid': revealed_positions
+                        }
+                    )
+                    
+                    self.cheat_invalidator.invalidate_participant(
+                        self.protocol.opponent_participant_id,
+                        self.cheat_detector.cheating_proof
+                    )
+                    
                     return VerificationResult(
                         valid=False,
-                        reason=f"Opponent lied about shot at {shot_pos}! Claimed {result_str}, actually {'hit' if actual_hit else 'miss'}"
+                        reason=f"🚫 OPPONENT CHEATED! Lied about shot at {shot_pos} - INVALIDATED"
                     )
             
             return VerificationResult(

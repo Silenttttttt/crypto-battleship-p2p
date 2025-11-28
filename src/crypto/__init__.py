@@ -21,6 +21,7 @@ from .timeout import (
     TimeoutConfig, TimeoutReason, ActionTimeout, ErrorRecovery,
     DisputeResolution, ProtocolMonitor
 )
+from .cheating import CheatType, CheatEvidence, CheatDetector, CheatInvalidator
 
 # Core components (for advanced usage)
 from .merkle import MerkleProof, MerkleGridCommitment, SimpleMerkleTree
@@ -45,6 +46,10 @@ __all__ = [
     'ErrorRecovery',
     'DisputeResolution',
     'ProtocolMonitor',
+    'CheatType',
+    'CheatEvidence',
+    'CheatDetector',
+    'CheatInvalidator',
     # Core components
     'MerkleProof',
     'MerkleGridCommitment',

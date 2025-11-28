@@ -459,7 +459,21 @@ class BattleshipP2P:
     
     def _trigger_blockchain_sync(self):
         """Trigger blockchain synchronization after game actions"""
-        if not self.game or not hasattr(self.game, 'blockchain'):
+        # Get the actual blockchain - might be nested in crypto_game
+        blockchain = None
+        
+        # Check for crypto_game first (integration layer)
+        if hasattr(self, 'crypto_game') and hasattr(self.crypto_game, 'blockchain'):
+            blockchain = self.crypto_game.blockchain
+        # Then check for game (base layer)
+        elif hasattr(self, 'game') and self.game:
+            if hasattr(self.game, 'blockchain'):
+                blockchain = self.game.blockchain
+            elif hasattr(self.game, 'crypto_game') and hasattr(self.game.crypto_game, 'blockchain'):
+                blockchain = self.game.crypto_game.blockchain
+        
+        if not blockchain:
+            print("⚠️  No blockchain found for sync")
             return
         
         try:
@@ -468,17 +482,36 @@ class BattleshipP2P:
             from crypto import create_sync_message
             
             # Create sync message
-            sync_msg = create_sync_message(self.game.blockchain)
+            sync_msg = create_sync_message(blockchain)
             
             # Send via P2P
+            print(f"📡 Triggering blockchain sync (blocks: {len(blockchain.chain)})...")
             self._send_message(GameMessageType.BLOCKCHAIN_SYNC, sync_msg)
             
         except Exception as e:
+            import traceback
             print(f"⚠️  Blockchain sync trigger error: {e}")
+            traceback.print_exc()
     
     def _handle_blockchain_sync(self, data: Dict):
         """Handle blockchain sync request from opponent"""
-        if not self.game or not hasattr(self.game, 'blockchain'):
+        print(f"📡 Received blockchain sync request")
+        
+        # Get the actual blockchain - might be nested in crypto_game
+        blockchain = None
+        
+        # Check for crypto_game first (integration layer)
+        if hasattr(self, 'crypto_game') and hasattr(self.crypto_game, 'blockchain'):
+            blockchain = self.crypto_game.blockchain
+        # Then check for game (base layer)
+        elif hasattr(self, 'game') and self.game:
+            if hasattr(self.game, 'blockchain'):
+                blockchain = self.game.blockchain
+            elif hasattr(self.game, 'crypto_game') and hasattr(self.game.crypto_game, 'blockchain'):
+                blockchain = self.game.crypto_game.blockchain
+        
+        if not blockchain:
+            print(f"⚠️  No blockchain found to sync")
             return
         
         try:
@@ -487,20 +520,40 @@ class BattleshipP2P:
             from crypto import handle_sync_message
             
             # Process sync message and get response
-            response = handle_sync_message(self.game.blockchain, data)
+            response = handle_sync_message(blockchain, data)
             
             # Send response
             self._send_message(GameMessageType.BLOCKCHAIN_SYNC_RESPONSE, response)
             
             if response.get('needs_sync'):
                 print(f"📡 Blockchain sync: {response['reason']}")
+            else:
+                print(f"📡 Blockchains already synchronized")
             
         except Exception as e:
+            import traceback
             print(f"⚠️  Blockchain sync handler error: {e}")
+            traceback.print_exc()
     
     def _handle_blockchain_sync_response(self, data: Dict):
         """Handle blockchain sync response from opponent"""
-        if not self.game or not hasattr(self.game, 'blockchain'):
+        print(f"📡 Received blockchain sync response")
+        
+        # Get the actual blockchain - might be nested in crypto_game
+        blockchain = None
+        
+        # Check for crypto_game first (integration layer)
+        if hasattr(self, 'crypto_game') and hasattr(self.crypto_game, 'blockchain'):
+            blockchain = self.crypto_game.blockchain
+        # Then check for game (base layer)
+        elif hasattr(self, 'game') and self.game:
+            if hasattr(self.game, 'blockchain'):
+                blockchain = self.game.blockchain
+            elif hasattr(self.game, 'crypto_game') and hasattr(self.game.crypto_game, 'blockchain'):
+                blockchain = self.game.crypto_game.blockchain
+        
+        if not blockchain:
+            print(f"⚠️  No blockchain found to sync")
             return
         
         try:
@@ -512,7 +565,7 @@ class BattleshipP2P:
             
             if needs_sync and 'transactions' in data:
                 # Merge incoming transactions
-                sync = BlockchainSync(self.game.blockchain)
+                sync = BlockchainSync(blockchain)
                 
                 # Convert transaction dicts back to Transaction objects
                 transactions = []
@@ -529,11 +582,14 @@ class BattleshipP2P:
                 
                 success, message = sync.merge_transactions(transactions)
                 print(f"📡 {message}")
+                print(f"📡 Blockchain now has {len(blockchain.chain)} blocks")
             else:
-                print(f"📡 Blockchains synchronized")
+                print(f"📡 Blockchains already synchronized")
                 
         except Exception as e:
+            import traceback
             print(f"⚠️  Blockchain sync response error: {e}")
+            traceback.print_exc()
     
     # Public API methods
     def listen_for_peer(self, host: str = "localhost", port: int = 12345) -> bool:

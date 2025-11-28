@@ -83,6 +83,10 @@ class CryptoBattleshipP2P(BattleshipP2P):
                     "proof": asdict(proof)
                 })
                 
+                # Sync blockchain after handling shot
+                print("🔧 Triggering blockchain sync after shot...")
+                self._trigger_blockchain_sync()
+                
                 # Turn stays with the shooter until they receive the result
             
             elif msg_type == GameMessageType.SHOT_RESULT:
@@ -103,6 +107,10 @@ class CryptoBattleshipP2P(BattleshipP2P):
                     print(f"✅ Cryptographically verified: {proof.result}")
                     # Switch turn to the opponent after successful verification
                     self.current_turn = self.opponent_id
+                    
+                    # Sync blockchain after receiving result
+                    print("🔧 Triggering blockchain sync after result...")
+                    self._trigger_blockchain_sync()
                 else:
                     print("❌ CHEATING DETECTED! Invalid proof!")
                     self._send_message(GameMessageType.GAME_OVER, {
@@ -113,6 +121,13 @@ class CryptoBattleshipP2P(BattleshipP2P):
             elif msg_type == GameMessageType.GAME_OVER:
                 print("🏁 Game over received")
                 self._set_phase(GamePhase.GAME_OVER)
+            
+            # Handle blockchain synchronization
+            elif msg_type == GameMessageType.BLOCKCHAIN_SYNC:
+                self._handle_blockchain_sync(data)
+            
+            elif msg_type == GameMessageType.BLOCKCHAIN_SYNC_RESPONSE:
+                self._handle_blockchain_sync_response(data)
             
             else:
                 print(f"🔄 Unhandled message type: {msg_type}")

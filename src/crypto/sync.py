@@ -217,16 +217,30 @@ def handle_sync_message(blockchain: Blockchain, message: Dict[str, Any]) -> Dict
     needs_sync, reason = sync.needs_sync()
     
     if needs_sync:
-        # Get transactions peer might need
+        # Get transactions peer might need - send ALL our transactions
         my_state = sync.get_sync_state()
-        missing_txs = sync.get_missing_transactions(peer_state.participant_sequences)
+        
+        # Collect all transactions from our blockchain
+        all_transactions = []
+        for block in blockchain.chain:
+            for tx in block.transactions:
+                # Convert transaction to dict with enum handling
+                tx_dict = {
+                    'move_type': tx.move_type.value if hasattr(tx.move_type, 'value') else str(tx.move_type),
+                    'participant_id': tx.participant_id,
+                    'data': tx.data,
+                    'timestamp': tx.timestamp,
+                    'signature': tx.signature,
+                    'sequence_number': getattr(tx, 'sequence_number', 0)
+                }
+                all_transactions.append(tx_dict)
         
         return {
             'type': 'blockchain_sync_response',
             'needs_sync': True,
             'reason': reason,
             'my_state': asdict(my_state),
-            'transactions': [asdict(tx) for tx in missing_txs]
+            'transactions': all_transactions
         }
     
     return {
