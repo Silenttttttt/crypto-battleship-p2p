@@ -27,6 +27,7 @@ class Transaction:
     data: Dict[str, Any]
     timestamp: float
     signature: str
+    sequence_number: int = 0  # For consensus ordering
 
 
 class Block:
@@ -54,11 +55,13 @@ class Block:
 
 
 class Blockchain:
-    """Blockchain for immutable history"""
+    """Blockchain for immutable history with consensus support"""
     
     def __init__(self):
         self.chain: List[Block] = []
         self.pending_transactions: List[Transaction] = []
+        self.transaction_sequence: int = 0  # Global sequence
+        self.participant_sequences: Dict[str, int] = {}  # Per-participant
         self.create_genesis_block()
     
     def create_genesis_block(self):
@@ -67,7 +70,21 @@ class Blockchain:
         self.chain.append(genesis)
     
     def add_transaction(self, transaction: Transaction) -> bool:
-        """Add a transaction to pending transactions"""
+        """
+        Add a transaction to pending transactions with sequence number.
+        Ensures ordering for consensus.
+        """
+        # Assign sequence number if not set
+        if transaction.sequence_number == 0:
+            self.transaction_sequence += 1
+            transaction.sequence_number = self.transaction_sequence
+        
+        # Track per-participant sequence
+        participant = transaction.participant_id
+        if participant not in self.participant_sequences:
+            self.participant_sequences[participant] = 0
+        self.participant_sequences[participant] += 1
+        
         self.pending_transactions.append(transaction)
         return True
     

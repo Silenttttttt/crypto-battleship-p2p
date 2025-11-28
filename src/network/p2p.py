@@ -45,6 +45,10 @@ class GameMessageType(Enum):
     # Connection management
     PING = "ping"
     PONG = "pong"
+    
+    # Blockchain synchronization
+    BLOCKCHAIN_SYNC = "blockchain_sync"
+    BLOCKCHAIN_SYNC_RESPONSE = "blockchain_sync_response"
 
 
 class ShotResult(Enum):
@@ -305,6 +309,10 @@ class BattleshipP2P:
             self._handle_game_over_message(data)
         elif msg_type == GameMessageType.PING:
             self._send_message(GameMessageType.PONG, {"timestamp": time.time()})
+        elif msg_type == GameMessageType.BLOCKCHAIN_SYNC:
+            self._handle_blockchain_sync(data)
+        elif msg_type == GameMessageType.BLOCKCHAIN_SYNC_RESPONSE:
+            self._handle_blockchain_sync_response(data)
     
     def _send_message(self, msg_type: GameMessageType, data: Dict, requires_response: bool = False) -> bool:
         """Send a game message through ExProtocol"""
@@ -412,6 +420,9 @@ class BattleshipP2P:
         
         if self.on_shot_received:
             self.on_shot_received(x, y, result)
+        
+        # Sync blockchain after handling shot
+        self._trigger_blockchain_sync()
     
     def _handle_shot_result(self, data: Dict):
         """Handle shot result"""
@@ -433,6 +444,9 @@ class BattleshipP2P:
         
         if self.on_shot_fired:
             self.on_shot_fired(x, y, result)
+        
+        # Sync blockchain after receiving result
+        self._trigger_blockchain_sync()
     
     def _handle_game_over_message(self, data: Dict):
         """Handle game over message"""
@@ -442,6 +456,84 @@ class BattleshipP2P:
         
         if self.on_game_over:
             self.on_game_over(winner, reason)
+    
+    def _trigger_blockchain_sync(self):
+        """Trigger blockchain synchronization after game actions"""
+        if not self.game or not hasattr(self.game, 'blockchain'):
+            return
+        
+        try:
+            import sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from crypto import create_sync_message
+            
+            # Create sync message
+            sync_msg = create_sync_message(self.game.blockchain)
+            
+            # Send via P2P
+            self._send_message(GameMessageType.BLOCKCHAIN_SYNC, sync_msg)
+            
+        except Exception as e:
+            print(f"⚠️  Blockchain sync trigger error: {e}")
+    
+    def _handle_blockchain_sync(self, data: Dict):
+        """Handle blockchain sync request from opponent"""
+        if not self.game or not hasattr(self.game, 'blockchain'):
+            return
+        
+        try:
+            import sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from crypto import handle_sync_message
+            
+            # Process sync message and get response
+            response = handle_sync_message(self.game.blockchain, data)
+            
+            # Send response
+            self._send_message(GameMessageType.BLOCKCHAIN_SYNC_RESPONSE, response)
+            
+            if response.get('needs_sync'):
+                print(f"📡 Blockchain sync: {response['reason']}")
+            
+        except Exception as e:
+            print(f"⚠️  Blockchain sync handler error: {e}")
+    
+    def _handle_blockchain_sync_response(self, data: Dict):
+        """Handle blockchain sync response from opponent"""
+        if not self.game or not hasattr(self.game, 'blockchain'):
+            return
+        
+        try:
+            import sys
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+            from crypto import BlockchainSync, Transaction, MoveType
+            
+            needs_sync = data.get('needs_sync', False)
+            
+            if needs_sync and 'transactions' in data:
+                # Merge incoming transactions
+                sync = BlockchainSync(self.game.blockchain)
+                
+                # Convert transaction dicts back to Transaction objects
+                transactions = []
+                for tx_dict in data['transactions']:
+                    tx = Transaction(
+                        move_type=MoveType(tx_dict['move_type']),
+                        participant_id=tx_dict['participant_id'],
+                        data=tx_dict['data'],
+                        timestamp=tx_dict['timestamp'],
+                        signature=tx_dict['signature'],
+                        sequence_number=tx_dict.get('sequence_number', 0)
+                    )
+                    transactions.append(tx)
+                
+                success, message = sync.merge_transactions(transactions)
+                print(f"📡 {message}")
+            else:
+                print(f"📡 Blockchains synchronized")
+                
+        except Exception as e:
+            print(f"⚠️  Blockchain sync response error: {e}")
     
     # Public API methods
     def listen_for_peer(self, host: str = "localhost", port: int = 12345) -> bool:

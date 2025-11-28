@@ -433,6 +433,79 @@ class ZeroTrustProtocol:
             'blockchain_valid': self.blockchain.verify_chain(),
             'all_signatures_valid': self.verify_all_signatures().valid
         }
+    
+    def reveal_commitment(self, commitment_data: Any) -> Dict[str, Any]:
+        """
+        Reveal commitment data after protocol completion.
+        This allows opponent to verify no cheating occurred.
+        
+        Returns revelation data that should be shared with opponent.
+        """
+        # Convert commitment data to serializable format
+        if isinstance(commitment_data, (list, tuple)):
+            commitment_data = list(commitment_data)
+        
+        revelation = {
+            'participant_id': self.my_participant_id,
+            'commitment_data': commitment_data,
+            'seed': self.seed.hex() if isinstance(self.seed, bytes) else str(self.seed),
+            'timestamp': time.time()
+        }
+        
+        # Sign the revelation (without signature field)
+        message = json.dumps(revelation, sort_keys=True)
+        signature = self.identity.sign_message(message)
+        
+        # Add signature to result
+        result = revelation.copy()
+        result['signature'] = signature
+        
+        return result
+    
+    def verify_opponent_revelation(self, 
+                                   revelation: Dict[str, Any],
+                                   original_commitment_root: str) -> VerificationResult:
+        """
+        Verify opponent's commitment revelation.
+        Ensures they didn't cheat during the protocol.
+        
+        Args:
+            revelation: Opponent's revealed commitment data
+            original_commitment_root: The commitment root they shared at start
+        
+        Returns:
+            VerificationResult indicating if revelation is valid
+        """
+        if not self.opponent_public_key:
+            return VerificationResult(
+                valid=False,
+                reason="Opponent public key not set"
+            )
+        
+        # Extract signature
+        signature = revelation.get('signature', '')
+        if not signature:
+            return VerificationResult(
+                valid=False,
+                reason="No signature in revelation"
+            )
+        
+        # Verify signature on revelation (without signature field)
+        revelation_copy = {k: v for k, v in revelation.items() if k != 'signature'}
+        message = json.dumps(revelation_copy, sort_keys=True)
+        
+        if not self.identity.verify_signature(message, signature, self.opponent_public_key):
+            return VerificationResult(
+                valid=False,
+                reason="Invalid signature on revelation"
+            )
+        
+        # Signature valid - application layer should verify actual commitment
+        return VerificationResult(
+            valid=True,
+            reason="Revelation signature valid - application should verify commitment",
+            details=revelation_copy
+        )
 
 
 __all__ = [

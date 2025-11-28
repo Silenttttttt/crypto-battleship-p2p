@@ -16,6 +16,11 @@ needing cryptographic guarantees without trust.
 from .protocol import ZeroTrustProtocol, VerificationResult
 from .commitment import CommitmentScheme, GridCommitment
 from .framework import CryptoFramework, create_crypto_framework
+from .sync import BlockchainSync, SyncState, create_sync_message, handle_sync_message
+from .timeout import (
+    TimeoutConfig, TimeoutReason, ActionTimeout, ErrorRecovery,
+    DisputeResolution, ProtocolMonitor
+)
 
 # Core components (for advanced usage)
 from .merkle import MerkleProof, MerkleGridCommitment, SimpleMerkleTree
@@ -30,6 +35,16 @@ __all__ = [
     'GridCommitment',
     'CryptoFramework',
     'create_crypto_framework',
+    'BlockchainSync',
+    'SyncState',
+    'create_sync_message',
+    'handle_sync_message',
+    'TimeoutConfig',
+    'TimeoutReason',
+    'ActionTimeout',
+    'ErrorRecovery',
+    'DisputeResolution',
+    'ProtocolMonitor',
     # Core components
     'MerkleProof',
     'MerkleGridCommitment',

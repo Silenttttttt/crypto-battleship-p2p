@@ -79,16 +79,49 @@ class BattleshipZeroTrust:
         print(f"   Ships: {len(ship_positions)} cells")
     
     def _initialize_ships(self):
-        """Initialize ship objects from positions"""
-        # Simple implementation: each position is a "ship"
-        # TODO: Group adjacent positions into proper ships
-        for pos in self.ship_positions:
+        """Initialize ship objects by grouping adjacent positions"""
+        if not self.ship_positions:
+            return
+        
+        # Group adjacent positions into ships
+        remaining = set(self.ship_positions)
+        ship_num = 1
+        
+        while remaining:
+            # Start a new ship
+            start_pos = remaining.pop()
+            ship_positions = [start_pos]
+            
+            # Find all adjacent positions (horizontal or vertical)
+            changed = True
+            while changed:
+                changed = False
+                for pos in list(remaining):
+                    # Check if adjacent to any position in current ship
+                    for ship_pos in ship_positions:
+                        # Adjacent if same row and consecutive columns, or same column and consecutive rows
+                        if ((pos[0] == ship_pos[0] and abs(pos[1] - ship_pos[1]) == 1) or
+                            (pos[1] == ship_pos[1] and abs(pos[0] - ship_pos[0]) == 1)):
+                            ship_positions.append(pos)
+                            remaining.remove(pos)
+                            changed = True
+                            break
+                    if changed:
+                        break
+            
+            # Sort positions for consistent ordering
+            ship_positions.sort()
+            
+            # Create ship object
             ship = Ship(
-                positions=[pos],
-                hits=[False],
-                name=f"Ship_{pos[0]}_{pos[1]}"
+                positions=ship_positions,
+                hits=[False] * len(ship_positions),
+                name=f"Ship_{ship_num}" if len(ship_positions) > 1 else f"Boat_{ship_num}"
             )
             self.ships.append(ship)
+            ship_num += 1
+        
+        print(f"   Initialized {len(self.ships)} ships: {[len(s.positions) for s in self.ships]}")
     
     def get_commitment_data(self) -> Dict[str, str]:
         """Get commitment data to share with opponent"""
@@ -273,6 +306,72 @@ class BattleshipZeroTrust:
         Framework does all the cryptographic verification.
         """
         return self.protocol.replay_from_blockchain()
+    
+    def reveal_grid(self) -> Dict[str, Any]:
+        """
+        Reveal grid after game completion for verification.
+        Opponent can verify no cheating occurred.
+        """
+        revelation = self.protocol.reveal_commitment(self.ship_positions)
+        revelation['grid_commitment_root'] = self.grid_commitment.get_commitment_root()
+        return revelation
+    
+    def verify_opponent_grid(self, revelation: Dict[str, Any]) -> VerificationResult:
+        """
+        Verify opponent's revealed grid.
+        Checks that their commitment matches their actual ship positions.
+        """
+        # First verify the revelation signature
+        result = self.protocol.verify_opponent_revelation(
+            revelation,
+            self.opponent_commitment_root
+        )
+        
+        if not result.valid:
+            return result
+        
+        # Reconstruct opponent's commitment from revealed data
+        try:
+            revealed_positions = revelation['commitment_data']
+            revealed_seed_hex = revelation['seed']
+            revealed_seed = bytes.fromhex(revealed_seed_hex)
+            
+            # Reconstruct commitment
+            from crypto import GridCommitment
+            reconstructed_commitment = GridCommitment(
+                marked_positions=revealed_positions,
+                seed=revealed_seed
+            )
+            
+            # Check if commitment root matches
+            if reconstructed_commitment.get_commitment_root() != self.opponent_commitment_root:
+                return VerificationResult(
+                    valid=False,
+                    reason="Opponent cheated! Revealed grid doesn't match commitment"
+                )
+            
+            # Verify all our shots against revealed grid
+            for shot_pos, result_str in self.my_shot_results.items():
+                actual_hit = shot_pos in revealed_positions
+                claimed_hit = (result_str == 'hit')
+                
+                if actual_hit != claimed_hit:
+                    return VerificationResult(
+                        valid=False,
+                        reason=f"Opponent lied about shot at {shot_pos}! Claimed {result_str}, actually {'hit' if actual_hit else 'miss'}"
+                    )
+            
+            return VerificationResult(
+                valid=True,
+                reason="Opponent's revealed grid matches commitment - no cheating detected!",
+                details={'revealed_positions': revealed_positions}
+            )
+            
+        except Exception as e:
+            return VerificationResult(
+                valid=False,
+                reason=f"Error verifying revelation: {e}"
+            )
 
 
 __all__ = [
