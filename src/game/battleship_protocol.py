@@ -15,9 +15,9 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from crypto import (ZeroTrustProtocol, VerificationResult, GridCommitment,
-                    CheatDetector, CheatType, CheatInvalidator)
-from crypto.merkle import MerkleProof
+from zerotrust import (ZeroTrustProtocol, VerificationResult, GridCommitment,
+                       CheatDetector, CheatType, CheatInvalidator)
+from zerotrust import MerkleProof
 
 
 @dataclass
@@ -390,7 +390,7 @@ class BattleshipZeroTrust:
             revealed_seed = bytes.fromhex(revealed_seed_hex)
             
             # Reconstruct commitment
-            from crypto import GridCommitment
+            from zerotrust import GridCommitment
             reconstructed_commitment = GridCommitment(
                 marked_positions=revealed_positions,
                 seed=revealed_seed

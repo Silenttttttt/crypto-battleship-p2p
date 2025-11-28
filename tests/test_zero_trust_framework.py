@@ -15,7 +15,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.battleship_protocol import BattleshipZeroTrust
-from crypto import VerificationResult
+from zerotrust import VerificationResult
 
 
 def test_zero_trust_framework():

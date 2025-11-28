@@ -484,7 +484,7 @@ class BattleshipP2P:
         try:
             import sys
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from crypto import create_sync_message
+            from zerotrust import create_sync_message
             
             # Create sync message
             sync_msg = create_sync_message(blockchain)
@@ -527,7 +527,7 @@ class BattleshipP2P:
         try:
             import sys
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from crypto import handle_sync_message
+            from zerotrust import handle_sync_message
             
             # Process sync message and get response
             response = handle_sync_message(blockchain, data)
@@ -574,7 +574,7 @@ class BattleshipP2P:
         try:
             import sys
             sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-            from crypto import BlockchainSync, Transaction, MoveType
+            from zerotrust import BlockchainSync, Transaction, MoveType
             
             needs_sync = data.get('needs_sync', False)
             

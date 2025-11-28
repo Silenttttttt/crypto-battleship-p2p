@@ -20,9 +20,9 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from crypto.merkle import MerkleGridCommitment, MerkleProof
-from crypto.identity import CryptoIdentity
-from crypto.blockchain import Blockchain, Transaction, MoveType
+from zerotrust import MerkleGridCommitment, MerkleProof
+from zerotrust import CryptoIdentity
+from zerotrust import Blockchain, Transaction, MoveType
 
 
 class CryptoBattleshipGame:

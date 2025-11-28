@@ -19,8 +19,8 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.battleship_protocol import BattleshipZeroTrust
-from crypto import ZeroTrustProtocol, CheatType, TimeoutConfig
-from crypto.merkle import MerkleProof
+from zerotrust import ZeroTrustProtocol, CheatType, TimeoutConfig
+from zerotrust import MerkleProof
 
 
 def test_enforcement_is_real():

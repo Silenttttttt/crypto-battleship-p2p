@@ -10,8 +10,8 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.battleship_protocol import BattleshipZeroTrust
-from crypto.merkle import MerkleProof
-from crypto import CheatType
+from zerotrust import MerkleProof
+from zerotrust import CheatType
 
 
 def test_invalid_proof_detection():

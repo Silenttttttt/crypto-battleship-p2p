@@ -20,8 +20,8 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.battleship_protocol import BattleshipZeroTrust
-from crypto import ZeroTrustProtocol, TimeoutConfig, CheatType
-from crypto.merkle import MerkleProof
+from zerotrust import ZeroTrustProtocol, TimeoutConfig, CheatType
+from zerotrust import MerkleProof
 
 
 def test_timeout_enforcement():

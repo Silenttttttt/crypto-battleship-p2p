@@ -14,7 +14,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from game.battleship_protocol import BattleshipZeroTrust
-from crypto import BlockchainSync, ActionTimeout, TimeoutConfig, ProtocolMonitor
+from zerotrust import BlockchainSync, ActionTimeout, TimeoutConfig, ProtocolMonitor
 
 
 def test_blockchain_sync():
