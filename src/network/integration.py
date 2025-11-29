@@ -293,7 +293,7 @@ class CryptoBattleshipP2P(BattleshipP2P):
                 return self._send_message(GameMessageType.FIRE_SHOT, {
                     "x": x, "y": y
                 })
-        return False
+            return False
     
     def get_crypto_game_state(self) -> Dict[str, Any]:
         """Get combined P2P and crypto game state"""
